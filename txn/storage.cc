@@ -13,7 +13,7 @@ bool Storage::Read(Key key, Value* result, int txn_unique_id) {
 }
 
 // Write value and timestamps
-void Storage::Write(Key key, Value value, int txn_unique_id) {
+void Storage::Write(Key key, Value value, int txn_unique_id, WriteMode mode) {
   data_[key] = value;
   timestamps_[key] = GetTime();
 }

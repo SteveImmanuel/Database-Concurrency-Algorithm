@@ -12,6 +12,8 @@ struct Version {
   int version_id_;   // Timestamp of the transaction that created(wrote) the version
 };
 
+
+
 // MVCC storage
 class MVCCStorage : public Storage {
  public:
@@ -22,7 +24,7 @@ class MVCCStorage : public Storage {
 
   // Inserts a new version with key and value
   // The third parameter is the txn_unique_id(txn timestamp), which is used for MVCC.
-  virtual void Write(Key key, Value value, int txn_unique_id = 0);
+  virtual void Write(Key key, Value value, int txn_unique_id = 0, WriteMode mode = INSERT);
 
   // Returns the timestamp at which the record with the specified key was last
   // updated (returns 0 if the record has never been updated). This is used for OCC.
@@ -38,7 +40,7 @@ class MVCCStorage : public Storage {
   virtual void Unlock(Key key);
   
   // Check whether apply or abort the write
-  virtual bool CheckWrite (Key key, int txn_unique_id);
+  virtual WriteMode CheckWrite (Key key, int txn_unique_id);
   
   virtual ~MVCCStorage();
 
@@ -47,7 +49,7 @@ class MVCCStorage : public Storage {
   friend class TxnProcessor;
   
   // Storage for MVCC, each key has a linklist of versions
-  unordered_map<Key, deque<Version*>*> mvcc_data_;
+  unordered_map<Key, deque<Version*>> mvcc_data_;
   
   // Mutexs for each key
   unordered_map<Key, Mutex*> mutexs_;
