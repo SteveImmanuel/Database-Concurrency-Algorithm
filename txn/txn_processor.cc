@@ -20,13 +20,17 @@ TxnProcessor::TxnProcessor(CCMode mode)
     lm_ = new LockManagerB(&ready_txns_);
 
   // Create the storage
+  // std::cout<<"create storage"<<std::endl;
+
   if (mode_ == MVCC) {
     storage_ = new MVCCStorage();
   } else {
     storage_ = new Storage();
   }
+  // std::cout<<"init storage"<<std::endl;
 
   storage_->InitStorage();
+  // std::cout<<"complete initialization"<<std::endl;
 
   // Start 'RunScheduler()' running.
   cpu_set_t cpuset;
@@ -122,7 +126,7 @@ void TxnProcessor::RunLockingScheduler() {
       bool blocked = false;
       // Request read locks.
       for (set<Key>::iterator it = txn->readset_.begin();
-           it != txn->readset_.end(); ++it) {
+      it != txn->readset_.end(); ++it) {
         if (!lm_->ReadLock(txn, *it)) {
           blocked = true;
           // If readset_.size() + writeset_.size() > 1, and blocked, just abort
@@ -335,16 +339,118 @@ void TxnProcessor::RunOCCParallelScheduler() {
   RunSerialScheduler();
 }
 
-void TxnProcessor::RunMVCCScheduler() {
-  // CPSC 438/538:
-  //
-  // Implement this method!
+void TxnProcessor::MVCCExecuteTxn(Txn* txn){
+  // Get the start time
+  txn->occ_start_time_ = GetTime();
+  // std::cout<<"read data"<<std::endl;
 
-  // Hint:Pop a txn from txn_requests_, and pass it to a thread to execute.
-  // Note that you may need to create another execute method, like TxnProcessor::MVCCExecuteTxn.
-  //
-  // [For now, run serial scheduler in order to make it through the test
-  // suite]
-  RunSerialScheduler();
+  Value result;
+  // Read everything in from readset.
+  for (set<Key>::iterator it = txn->readset_.begin();
+       it != txn->readset_.end(); ++it) {
+    // Save each read result iff record exists in storage.
+    // storage_->Lock(*it);
+    if(storage_->Read(*it, &result,txn->unique_id_))
+      txn->reads_[*it] = result;
+    // storage_->Unlock(*it);
+  }
+  // std::cout<<"done read data1"<<std::endl;
+
+
+  // Read everything in from writeset.
+  for (set<Key>::iterator it = txn->writeset_.begin();
+       it != txn->writeset_.end(); ++it) {
+    // Save each read result iff record exists in storage.
+    // storage_->Lock(*it);
+    if(storage_->Read(*it, &result,txn->unique_id_))
+      txn->reads_[*it] = result;
+    // storage_->Unlock(*it);
+  }
+
+  // std::cout<<"done read data2"<<std::endl;
+
+  txn->Run();
+  // std::cout<<"locking"<<std::endl;
+
+  MVCCLockWriteKeys(txn);
+  // std::cout<<"done locking"<<std::endl;
+
+  map<Key, WriteMode> write_mode_list;
+  bool valid = MVCCCheckWrites(txn, &write_mode_list);
+  if(valid){
+    // std::cout<<"valid"<<std::endl;
+
+    MVCCApplyWrites(txn,write_mode_list);
+    txn->status_ = COMMITTED;
+    MVCCUnlockWriteKeys(txn);
+    txn_results_.Push(txn);
+  }else{
+    // std::cout<<"not valid"<<std::endl;
+    
+    MVCCUnlockWriteKeys(txn);
+    txn->reads_.empty();
+    txn->writes_.empty();
+    txn->status_ = INCOMPLETE;
+    mutex_.Lock();
+    txn->unique_id_ = next_unique_id_;
+    next_unique_id_++;
+    txn_requests_.Push(txn);
+    mutex_.Unlock();
+  }
+
+}
+
+bool TxnProcessor::MVCCCheckWrites(Txn* txn, map<Key, WriteMode>* wml){
+  bool passed = true;
+  for (set<Key>::iterator it = txn->writeset_.begin();
+      it != txn->writeset_.end(); ++it) {
+    WriteMode mode;
+    mode = storage_->CheckWrite(*it, txn->unique_id_);
+    wml->insert({*it, mode});
+    
+    if(mode == INVALID || mode == ROLLEDBACK){
+      passed = false;
+    }
+  }
+  return passed;
+}
+
+void TxnProcessor::MVCCLockWriteKeys(Txn* txn){
+  // size_t total_lock = txn->writeset_.size();
+  // while(total_lock>0){
+    for (set<Key>::iterator it = txn->writeset_.begin();
+        it != txn->writeset_.end(); ++it) {
+      storage_->Lock(*it);
+    }
+  // }
+}
+
+void TxnProcessor::MVCCUnlockWriteKeys(Txn* txn){
+  for (set<Key>::iterator it = txn->writeset_.begin();
+      it != txn->writeset_.end(); ++it) {
+    storage_->Unlock(*it);
+  }
+}
+
+void TxnProcessor::MVCCApplyWrites(Txn* txn, map<Key, WriteMode> wml){
+  for (map<Key, Value>::iterator it = txn->writes_.begin();
+       it != txn->writes_.end(); ++it) {
+    storage_->Write(it->first, it->second, txn->unique_id_,wml[it->first]);
+  }
+}
+
+void TxnProcessor::RunMVCCScheduler() {
+  // std::cout<<"start mvccs"<<std::endl;
+
+  while(tp_.Active()){
+    Txn* txn;
+    if (txn_requests_.Pop(&txn)) {
+      // Start txn running in its own thread.
+      tp_.RunTask(new Method<TxnProcessor, void, Txn*>(
+                  this,
+                  &TxnProcessor::MVCCExecuteTxn,
+                  txn));
+    }
+  }
 }
 
