@@ -11,7 +11,6 @@
 using std::deque;
 
 LockManager::~LockManager() {
-  // Cleanup lock_table_
   for (auto it = lock_table_.begin(); it != lock_table_.end(); it++) {
     delete it->second;
   }
@@ -31,16 +30,13 @@ LockManagerA::LockManagerA(deque<Txn*>* ready_txns) {
 }
 
 bool LockManagerA::WriteLock(Txn* txn, const Key& key) {
-  bool empty = true;
-  LockRequest rq(EXCLUSIVE, txn);
-  deque<LockRequest> *dq = _getLockQueue(key);
-
-  empty = dq->empty();
-  dq->push_back(rq);
-
+  LockRequest request(EXCLUSIVE, txn);
+  deque<LockRequest> *requests = _getLockQueue(key);
+  bool empty = requests->empty();
   if (!empty) { // Add to wait list, doesn't own lock.
     txn_waits_[txn]++;
   }
+  requests->push_back(request);
   return empty;
 }
 
@@ -51,21 +47,21 @@ bool LockManagerA::ReadLock(Txn* txn, const Key& key) {
 }
 
 void LockManagerA::Release(Txn* txn, const Key& key) {
-  deque<LockRequest> *queue = _getLockQueue(key);
-  bool removedOwner = true; // Is the lock removed the lock owner?
+  deque<LockRequest> *requests = _getLockQueue(key);
+  bool removed = true; // Is the lock removed the lock owner?
 
   // Delete the txn's exclusive lock.
-  for (auto it = queue->begin(); it < queue->end(); it++) {
+  for (auto it = requests->begin(); it < requests->end(); it++) {
     if (it->txn_ == txn) { // TODO is it ok to just compare by address?
-        queue->erase(it);
+        requests->erase(it);
         break;
     }
-    removedOwner = false;
+    removed = false;
   }
 
-  if (!queue->empty() && removedOwner) {
+  if (!requests->empty() && removed) {
     // Give the next transaction the lock
-    LockRequest next = queue->front();
+    LockRequest next = requests->front();
 
     if (--txn_waits_[next.txn_] == 0) {
         ready_txns_->push_back(next.txn_);
@@ -75,15 +71,21 @@ void LockManagerA::Release(Txn* txn, const Key& key) {
 }
 
 LockMode LockManagerA::Status(const Key& key, vector<Txn*>* owners) {
-  deque<LockRequest> *dq = _getLockQueue(key);
-  if (dq->empty()) {
-    return UNLOCKED;
-  } else {
+
+  deque<LockRequest> *requests = _getLockQueue(key);
+  if (!requests->empty()) {
+
     vector<Txn*> _owners;
-    _owners.push_back(dq->front().txn_);
+    Txn* txn;
+
+    txn = requests->front().txn_;
+    _owners.push_back(txn);
     *owners = _owners;
+
     return EXCLUSIVE;
   }
+
+  return UNLOCKED;
 }
 
 LockManagerB::LockManagerB(deque<Txn*>* ready_txns) {
