@@ -17,13 +17,6 @@ using std::tr1::unordered_map;
 using std::deque;
 using std::map;
 
-//write mode, only used in mvcc
-enum WriteMode {
-  INVALID = -1,
-  ROLLEDBACK = 0,
-  OVERWRITE = 1,
-  INSERT = 2,
-};
 
 class Storage {
  public:
@@ -35,8 +28,7 @@ class Storage {
   // Inserts the record <key, value>, replacing any previous record with the
   // same key.
   // Note that the third parameter is only used for MVCC, the default vaule is 0.
-//             the fourth parameter is only used for MVCC, the default vaule is INSERT.
-  virtual void Write(Key key, Value value, int txn_unique_id = 0, WriteMode mode = INSERT);
+  virtual void Write(Key key, Value value, int txn_unique_id = 0);
 
   // Returns the timestamp at which the record with the specified key was last
   // updated (returns 0 if the record has never been updated). This is used for OCC.
@@ -52,7 +44,7 @@ class Storage {
   
   virtual void Unlock(Key key) {}
   
-  virtual WriteMode CheckWrite (Key key, int txn_unique_id) {return INSERT;}
+  virtual bool CheckWrite (Key key, int txn_unique_id) {return true;}
    
  private:
  

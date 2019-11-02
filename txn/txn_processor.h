@@ -99,13 +99,11 @@ class TxnProcessor {
   // The following functions are for MVCC
   void MVCCExecuteTxn(Txn* txn);
 
-  bool MVCCCheckWrites(Txn* txn,map<Key, WriteMode>* wml);
+  bool MVCCCheckWrites(Txn* txn);
 
   void MVCCLockWriteKeys(Txn* txn);
 
   void MVCCUnlockWriteKeys(Txn* txn);
-
-  void MVCCApplyWrites(Txn* txn, map<Key, WriteMode> wml);
 
   void GarbageCollection();
 
