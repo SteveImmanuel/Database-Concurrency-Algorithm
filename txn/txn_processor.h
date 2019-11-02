@@ -29,10 +29,8 @@ using std::string;
 enum CCMode {
   SERIAL = 0,                  // Serial transaction execution (no concurrency)
   LOCKING_EXCLUSIVE_ONLY = 1,  // Part 1A
-  LOCKING = 2,                 // Part 1B
-  OCC = 3,                     // Part 2
-  P_OCC = 4,                   // Part 3
-  MVCC = 5,
+  OCC = 2,                     // Part 2
+  MVCC = 3,
 };
 
 // Returns a human-readable string naming of the providing mode.
@@ -75,14 +73,8 @@ class TxnProcessor {
   // Locking version of scheduler.
   void RunLockingScheduler();
 
-  // Determine whether a txn is valid in the occ scheduler.
-  bool OCCValidateTransaction(const Txn &txn) const;
-
   // OCC version of scheduler.
   void RunOCCScheduler();
-
-  // OCC version of scheduler with parallel validation.
-  void RunOCCParallelScheduler();
 
   // MVCC version of scheduler.
   void RunMVCCScheduler();
@@ -99,13 +91,9 @@ class TxnProcessor {
   // The following functions are for MVCC
   void MVCCExecuteTxn(Txn* txn);
 
-  bool MVCCCheckWrites(Txn* txn);
-
   void MVCCLockWriteKeys(Txn* txn);
 
   void MVCCUnlockWriteKeys(Txn* txn);
-
-  void GarbageCollection();
 
   // Concurrency control mechanism the TxnProcessor is currently using.
   CCMode mode_;
