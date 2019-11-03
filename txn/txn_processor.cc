@@ -12,7 +12,7 @@
 #define THREAD_COUNT 8
 
 TxnProcessor::TxnProcessor(CCMode mode) : mode_(mode), tp_(THREAD_COUNT), next_unique_id_(1) {
-  if (mode_ == LOCKING_EXCLUSIVE_ONLY) lm_ = new LockManagerA(&ready_txns_);
+  if (mode_ == LOCKING_EXCLUSIVE_ONLY) lm_ = new SimpleLocking(&ready_txns_);
 
   // Create the storage
 
@@ -119,7 +119,8 @@ void TxnProcessor::RunLockingScheduler() {
   while (tp_.Active()) {
     if (txn_requests_.Pop(&txn)) {
       bool blocked = false;
-      // Request read locks.
+
+      // // Request read locks.
       for (set<Key>::iterator it = txn->readset_.begin(); it != txn->readset_.end(); ++it) {
         if (!lm_->ReadLock(txn, *it)) {
           blocked = true;
@@ -170,6 +171,7 @@ void TxnProcessor::RunLockingScheduler() {
         mutex_.Unlock();
       }
     }
+
 
     // Process and commit all transactions that have finished running.
     while (completed_txns_.Pop(&txn)) {

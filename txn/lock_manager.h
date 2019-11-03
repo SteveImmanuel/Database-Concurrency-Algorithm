@@ -118,40 +118,15 @@ class LockManager {
 };
 
 // Version of the LockManager implementing ONLY exclusive locks.
-class LockManagerA : public LockManager {
+class SimpleLocking : public LockManager {
  public:
-  explicit LockManagerA(deque<Txn*>* ready_txns);
-  inline virtual ~LockManagerA() {}
+  explicit SimpleLocking(deque<Txn*>* ready_txns);
+  inline virtual ~SimpleLocking() {}
 
   virtual bool ReadLock(Txn* txn, const Key& key);
   virtual bool WriteLock(Txn* txn, const Key& key);
   virtual void Release(Txn* txn, const Key& key);
   virtual LockMode Status(const Key& key, vector<Txn*>* owners);
-};
-
-// Version of the LockManager implementing both shared and exclusive locks.
-class LockManagerB : public LockManager {
- public:
-  explicit LockManagerB(deque<Txn*>* ready_txns);
-  inline virtual ~LockManagerB() {}
-
-  virtual bool ReadLock(Txn* txn, const Key& key);
-  virtual bool WriteLock(Txn* txn, const Key& key);
-  virtual void Release(Txn* txn, const Key& key);
-  virtual LockMode Status(const Key& key, vector<Txn*>* owners);
- private:
-  /**
-   * Returns `false` if no exclusive lock is in the lock queue for `key`.
-   */
-
-  /**
-   * Maintains counts of the number of exclusive locks in lock_table_
-   * for each key.
-   */
-  unordered_map<Key, uint64_t> _numExclusiveWaiting;
-
-  bool _addLock(LockMode mode, Txn* txn, const Key& key);
-  bool _noExclusiveWaiting(const Key& key);
 };
 
 #endif  // _LOCK_MANAGER_H_
